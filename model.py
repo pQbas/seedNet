@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from cbam import CBAM 
 
 class Residual(nn.Module):
-  def __init__(self, num_channels, use_1x1conv=False, strides=1):
+  def __init__(self, num_channels, use_1x1conv=False, strides=1, use_cbam=False):
     super().__init__()
     self.conv1 = nn.LazyConv2d(num_channels, kernel_size=3, padding=1,stride=strides)
     self.conv2 = nn.LazyConv2d(num_channels, kernel_size=3, padding=1, stride=strides)
@@ -15,9 +15,20 @@ class Residual(nn.Module):
     self.bn1 = nn.LazyBatchNorm2d()
     self.bn2 = nn.LazyBatchNorm2d()
 
+    if use_cbam:
+        self.cbam = CBAM(num_channels, 2, 7)
+    else:
+        self.cbam = None
+
   def forward(self, X):
     Y = F.relu(self.bn1(self.conv1(X)))
     Y = self.bn2(self.conv2(Y))
+
+    if self.cbam:
+        print("Si se agrego!!!")
+        ''' Here goes CBAM '''
+        Y = self.cbam(Y)
+
     if self.conv3:
       X = self.conv3(X)
     Y += X
@@ -25,15 +36,16 @@ class Residual(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, arch, lr=0.1, num_classes=10):
+    def __init__(self, arch, lr=0.1, num_classes=10, use_cbam=True):
         super(ResNet, self).__init__()
         self.net = nn.Sequential(self.b1())
+        self.use_cbam = use_cbam
 
         for b in arch:
             num_residuals = b[0]
             num_channels = b[1]            
             for i in range(num_residuals):
-                self.net.append(Residual(num_channels, use_1x1conv=(i==0), strides=1))
+                self.net.append(Residual(num_channels, use_1x1conv=(i==0), strides=1, use_cbam=self.use_cbam))
 
         self.net.append(
             nn.Sequential(
@@ -54,8 +66,8 @@ class ResNet(nn.Module):
 
 
 class ResNet18(ResNet):
-    def __init__(self, lr=0.1, num_classes=10):
-        super().__init__(((2, 64), (2, 128), (2, 256), (2, 512)),lr, num_classes)
+    def __init__(self, lr=0.1, num_classes=10, use_cbam=False):
+        super().__init__(((2, 64), (2, 128), (2, 256), (2, 512)),lr, num_classes, use_cbam)
 
 
 
